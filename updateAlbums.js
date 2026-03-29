@@ -1,44 +1,59 @@
-const fs = require("fs");
+import fs from "fs";
 
 const PLAYLISTS = [
-  { name: "pm2", id: "pl.u-xlyNjvVtkpmLMy" },
-  { name: "pm5", id: "pl.u-oZyl4JguR06J4K" }
+  {
+    name: "pm2",
+    url: "https://music.apple.com/kr/playlist/codlishwave-pm2/pl.u-xlyNjvVtkpmLMy"
+  },
+  {
+    name: "pm5",
+    url: "https://music.apple.com/kr/playlist/codlishwave-pm5/pl.u-oZyl4JguR06J4K"
+  }
 ];
 
-async function fetchPlaylist(id) {
-  const res = await fetch(
-    `https://amp-api.music.apple.com/v1/catalog/kr/playlists/${id}`
-  );
+async function scrapePlaylist(p) {
+  console.log("Fetching:", p.name);
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch playlist");
-  }
+  const res = await fetch(p.url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    }
+  });
 
-  return res.json();
+  if (!res.ok) throw new Error("Failed to fetch playlist");
+
+  const html = await res.text();
+
+  // Apple Music JSON 데이터 추출
+  const match = html.match(/<script id="serialized-server-data".*?>(.*?)<\/script>/s);
+
+  if (!match) throw new Error("Playlist data not found");
+
+  const json = JSON.parse(match[1]);
+
+  const tracks =
+    json[0].data.sections[0].items;
+
+  const albums = tracks.map(t => ({
+    title: t.title,
+    artist: t.subtitle,
+    cover: t.artwork.url.replace("{w}", "600").replace("{h}", "600"),
+    url: t.url
+  }));
+
+  return {
+    category: p.name,
+    albums
+  };
 }
 
 async function run() {
   const result = [];
 
   for (const p of PLAYLISTS) {
-    console.log("Fetching:", p.name);
-
-    const data = await fetchPlaylist(p.id);
-
-    const albums =
-      data.data[0].relationships.tracks.data.map(t => ({
-        title: t.attributes.albumName,
-        artist: t.attributes.artistName,
-        cover: t.attributes.artwork.url
-          .replace("{w}", "600")
-          .replace("{h}", "600"),
-        url: t.attributes.url
-      }));
-
-    result.push({
-      category: p.name,
-      albums
-    });
+    const data = await scrapePlaylist(p);
+    result.push(data);
   }
 
   fs.mkdirSync("./data", { recursive: true });
@@ -51,7 +66,4 @@ async function run() {
   console.log("✅ albums.json updated");
 }
 
-run().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+run();

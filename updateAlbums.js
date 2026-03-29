@@ -1,5 +1,4 @@
-const fs = require("fs");
-const fetch = require("node-fetch");
+import fs from "fs";
 
 const PLAYLISTS = [
   {
@@ -12,95 +11,50 @@ const PLAYLISTS = [
   }
 ];
 
-async function fetchHTML(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" }
-  });
+async function fetchPlaylist(url) {
+  const res = await fetch(url);
+  const html = await res.text();
 
-  if (!res.ok) throw new Error("Fetch failed");
-
-  return await res.text();
-}
-
-function extractSerializedData(html) {
+  // Apple Music 내부 JSON 추출
   const match = html.match(
     /<script id="serialized-server-data".*?>(.*?)<\/script>/
   );
 
-  if (!match) {
-    throw new Error("Apple Music data not found");
-  }
+  if (!match) throw new Error("Playlist data not found");
 
-  return JSON.parse(match[1]);
+  const json = JSON.parse(match[1]);
+
+  const tracks =
+    json[0].data.sections[0].items;
+
+  return tracks.map(t => ({
+    title: t.title,
+    artist: t.subtitle,
+    cover: t.artwork.url.replace("{w}", "600").replace("{h}", "600"),
+    url: t.href
+      ? `https://music.apple.com${t.href}`
+      : url
+  }));
 }
 
-/* ⭐ 구조 자동 탐색 */
-function findTracks(obj) {
-  if (!obj || typeof obj !== "object") return null;
+const result = [];
 
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const found = findTracks(item);
-      if (found) return found;
-    }
-  } else {
-    if (obj.items && Array.isArray(obj.items)) {
-      return obj.items;
-    }
+for (const p of PLAYLISTS) {
+  console.log("Fetching:", p.name);
 
-    for (const key of Object.keys(obj)) {
-      const found = findTracks(obj[key]);
-      if (found) return found;
-    }
-  }
+  const albums = await fetchPlaylist(p.url);
 
-  return null;
+  result.push({
+    category: p.name,
+    albums
+  });
 }
 
-function parseAlbums(serialized) {
-  const tracks = findTracks(serialized);
+fs.mkdirSync("./data", { recursive: true });
 
-  if (!tracks) {
-    throw new Error("Tracks not found");
-  }
+fs.writeFileSync(
+  "./data/albums.json",
+  JSON.stringify(result, null, 2)
+);
 
-  return tracks
-    .filter(t => t.artwork)
-    .map(t => ({
-      title: t.title || "",
-      artist: t.subtitle || "",
-      cover: t.artwork.url
-        .replace("{w}", "600")
-        .replace("{h}", "600"),
-      url: "https://music.apple.com" + t.href
-    }));
-}
-
-async function run() {
-  const result = [];
-
-  for (const p of PLAYLISTS) {
-    console.log("Fetching:", p.name);
-
-    const html = await fetchHTML(p.url);
-    const data = extractSerializedData(html);
-    const albums = parseAlbums(data);
-
-    result.push({
-      category: p.name,
-      albums
-    });
-  }
-
-  fs.writeFileSync(
-    "./data/albums.json",
-    JSON.stringify(result, null, 2)
-  );
-
-  console.log("✅ albums.json updated");
-}
-
-run().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+console.log("albums.json updated!");

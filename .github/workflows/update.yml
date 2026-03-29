@@ -1,9 +1,10 @@
-name: Update Albums
+name: Update Apple Music Playlists
 
 on:
-  push:
-    branches: [ main ]
+  # 수동 실행 버튼
   workflow_dispatch:
+
+  # 6시간마다 자동 실행
   schedule:
     - cron: "0 */6 * * *"
 
@@ -11,23 +12,33 @@ jobs:
   update:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ 저장소 가져오기
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # 2️⃣ Node 설치 (Node24 대응 안전 버전)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Install dependencies
-        run: npm install node-fetch@2
-
-      - name: Run updater
+      # 3️⃣ update script 실행
+      - name: Run playlist updater
         run: node updateAlbums.js
 
-      - name: Commit changes
+      # 4️⃣ 변경사항 커밋 & 푸시
+      - name: Commit updated albums.json
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
+
           git add data/albums.json
-          git commit -m "Auto update albums" || echo "No changes"
-          git push
+
+          git diff --cached --quiet && echo "No changes" || (
+            git commit -m "🎵 Auto update Apple Music playlists"
+            git push
+          )

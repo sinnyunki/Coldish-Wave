@@ -20,9 +20,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install node-fetch@2
-
       - name: Run updater
         run: node updateAlbums.js
 

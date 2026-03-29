@@ -1,5 +1,5 @@
 name: Update Apple Music Albums
-
+# trigger
 on:
   schedule:
     - cron: "0 */6 * * *"

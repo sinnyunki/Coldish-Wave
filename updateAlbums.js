@@ -1,8 +1,8 @@
 const fs = require("fs");
+const fetch = require("node-fetch");
 
 /*
   Apple Music Playlist FREE Scraper
-  GitHub Actions Compatible
 */
 
 const PLAYLISTS = [
@@ -16,7 +16,6 @@ const PLAYLISTS = [
   }
 ];
 
-// HTML 가져오기
 async function fetchHTML(url) {
   const res = await fetch(url, {
     headers: {
@@ -24,29 +23,30 @@ async function fetchHTML(url) {
     }
   });
 
-  if (!res.ok) throw new Error("Fetch failed");
+  if (!res.ok) {
+    throw new Error("Fetch failed: " + res.status);
+  }
 
   return await res.text();
 }
 
-// Apple 내부 JSON 추출
 function extractJSON(html) {
   const match = html.match(
     /<script id="serialized-server-data"[^>]*>(.*?)<\/script>/
   );
 
-  if (!match) throw new Error("Playlist data not found");
+  if (!match) {
+    throw new Error("Serialized data not found");
+  }
 
   return JSON.parse(match[1]);
 }
 
-// 앨범 데이터 변환
 function parseAlbums(data) {
-  const tracks =
-    data[0].data.sections[0].items;
+  const tracks = data[0].data.sections[0].items;
 
   return tracks.map(t => ({
-    title: t.contentDescriptor?.albumName || t.title,
+    title: t.title,
     artist: t.subtitle,
     cover: t.artwork.url
       .replace("{w}", "600")

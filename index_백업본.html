@@ -674,6 +674,42 @@ body:not(.grid-view) #genreHUD {
 <!-- 🔽 VIEW TOGGLE BUTTON (PC 전용) -->
 <button id="viewToggle">GRID VIEW</button>
     
+<!-- ✅ albums.json 자동 로더 추가 -->
+<script>
+/* =================================================
+   Apple Music 자동 앨범 로드 (FREE AUTO SYSTEM)
+================================================= */
+
+let albums = [];
+
+async function loadAlbums(){
+
+  try {
+
+    // 캐시 방지 (GitHub Pages 필수)
+    const res = await fetch(
+      "data/albums.json?v=" + Date.now()
+    );
+
+    const json = await res.json();
+
+    // playlists 여러개 → 하나로 합치기
+    albums = json.playlists.flatMap(p =>
+      p.albums.map(a => ({
+        ...a,
+        playlist: p.name
+      }))
+    );
+
+    initAlbums(); // 기존 시스템 실행
+
+  } catch(e){
+    console.error("albums.json load failed", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadAlbums);
+</script>
     
 <script>
 /* =================================================
@@ -1260,55 +1296,6 @@ window.addEventListener('keydown', e => {
   <button id="fullscreenBtn">COLDISH WAVE</button>
 </div>
     
-<script>
-/* ===============================
-   Apple Music Playlist Loader
-=============================== */
 
-const PLAYLISTS = {
-  pm2:  "https://music.apple.com/kr/playlist/codlishwave-pm2/pl.u-xlyNjvVtkpmLMy",
-  pm5:  "https://music.apple.com/kr/playlist/codlishwave-pm5/pl.u-oZyl4JguR06J4K"
-};
-
-async function loadAppleMusicAlbums() {
-
-  const allAlbums = [];
-
-  for (const [genre, url] of Object.entries(PLAYLISTS)) {
-
-    console.log("Fetching:", genre);
-
-    const res = await fetch(
-      "https://itunes.apple.com/search?term=" +
-      encodeURIComponent(url) +
-      "&entity=album&limit=50"
-    );
-
-    const data = await res.json();
-
-    const albums = data.results.map(a => ({
-      title: a.collectionName,
-      artist: a.artistName,
-      cover: a.artworkUrl100.replace("100x100","600x600"),
-      year: a.releaseDate?.slice(0,4) || "",
-      genre
-    }));
-
-    allAlbums.push(...albums);
-  }
-
-  console.log("Albums loaded:", allAlbums.length);
-
-  /* ⭐ 기존 렌더 함수 호출 */
-  if (typeof renderAlbums === "function") {
-    renderAlbums(allAlbums);
-  } else {
-    console.warn("renderAlbums() 없음");
-  }
-}
-
-/* 페이지 로드 후 실행 */
-window.addEventListener("load", loadAppleMusicAlbums);
-</script>
 </body>
 </html>

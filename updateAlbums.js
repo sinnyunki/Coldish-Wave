@@ -1,60 +1,57 @@
-import fs from "fs";
+const fs = require("fs");
 
 const PLAYLISTS = [
-  {
-    name: "pm2",
-    url: "https://music.apple.com/kr/playlist/codlishwave-pm2/pl.u-xlyNjvVtkpmLMy"
-  },
-  {
-    name: "pm5",
-    url: "https://music.apple.com/kr/playlist/codlishwave-pm5/pl.u-oZyl4JguR06J4K"
-  }
+  { name: "pm2", id: "pl.u-xlyNjvVtkpmLMy" },
+  { name: "pm5", id: "pl.u-oZyl4JguR06J4K" }
 ];
 
-async function fetchPlaylist(url) {
-  const res = await fetch(url);
-  const html = await res.text();
-
-  // Apple Music 내부 JSON 추출
-  const match = html.match(
-    /<script id="serialized-server-data".*?>(.*?)<\/script>/
+async function fetchPlaylist(id) {
+  const res = await fetch(
+    `https://amp-api.music.apple.com/v1/catalog/kr/playlists/${id}`
   );
 
-  if (!match) throw new Error("Playlist data not found");
+  if (!res.ok) {
+    throw new Error("Failed to fetch playlist");
+  }
 
-  const json = JSON.parse(match[1]);
-
-  const tracks =
-    json[0].data.sections[0].items;
-
-  return tracks.map(t => ({
-    title: t.title,
-    artist: t.subtitle,
-    cover: t.artwork.url.replace("{w}", "600").replace("{h}", "600"),
-    url: t.href
-      ? `https://music.apple.com${t.href}`
-      : url
-  }));
+  return res.json();
 }
 
-const result = [];
+async function run() {
+  const result = [];
 
-for (const p of PLAYLISTS) {
-  console.log("Fetching:", p.name);
+  for (const p of PLAYLISTS) {
+    console.log("Fetching:", p.name);
 
-  const albums = await fetchPlaylist(p.url);
+    const data = await fetchPlaylist(p.id);
 
-  result.push({
-    category: p.name,
-    albums
-  });
+    const albums =
+      data.data[0].relationships.tracks.data.map(t => ({
+        title: t.attributes.albumName,
+        artist: t.attributes.artistName,
+        cover: t.attributes.artwork.url
+          .replace("{w}", "600")
+          .replace("{h}", "600"),
+        url: t.attributes.url
+      }));
+
+    result.push({
+      category: p.name,
+      albums
+    });
+  }
+
+  fs.mkdirSync("./data", { recursive: true });
+
+  fs.writeFileSync(
+    "./data/albums.json",
+    JSON.stringify(result, null, 2)
+  );
+
+  console.log("✅ albums.json updated");
 }
 
-fs.mkdirSync("./data", { recursive: true });
-
-fs.writeFileSync(
-  "./data/albums.json",
-  JSON.stringify(result, null, 2)
-);
-
-console.log("albums.json updated!");
+run().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

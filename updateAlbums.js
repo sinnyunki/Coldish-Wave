@@ -1,10 +1,6 @@
 const fs = require("fs");
 const fetch = require("node-fetch");
 
-/*
-  Apple Music Playlist FREE Scraper
-*/
-
 const PLAYLISTS = [
   {
     name: "pm2",
@@ -18,41 +14,66 @@ const PLAYLISTS = [
 
 async function fetchHTML(url) {
   const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0"
-    }
+    headers: { "User-Agent": "Mozilla/5.0" }
   });
 
-  if (!res.ok) {
-    throw new Error("Fetch failed: " + res.status);
-  }
+  if (!res.ok) throw new Error("Fetch failed");
 
   return await res.text();
 }
 
-function extractJSON(html) {
+function extractSerializedData(html) {
   const match = html.match(
-    /<script id="serialized-server-data"[^>]*>(.*?)<\/script>/
+    /<script id="serialized-server-data".*?>(.*?)<\/script>/
   );
 
   if (!match) {
-    throw new Error("Serialized data not found");
+    throw new Error("Apple Music data not found");
   }
 
   return JSON.parse(match[1]);
 }
 
-function parseAlbums(data) {
-  const tracks = data[0].data.sections[0].items;
+/* ⭐ 구조 자동 탐색 */
+function findTracks(obj) {
+  if (!obj || typeof obj !== "object") return null;
 
-  return tracks.map(t => ({
-    title: t.title,
-    artist: t.subtitle,
-    cover: t.artwork.url
-      .replace("{w}", "600")
-      .replace("{h}", "600"),
-    url: "https://music.apple.com" + t.href
-  }));
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findTracks(item);
+      if (found) return found;
+    }
+  } else {
+    if (obj.items && Array.isArray(obj.items)) {
+      return obj.items;
+    }
+
+    for (const key of Object.keys(obj)) {
+      const found = findTracks(obj[key]);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+function parseAlbums(serialized) {
+  const tracks = findTracks(serialized);
+
+  if (!tracks) {
+    throw new Error("Tracks not found");
+  }
+
+  return tracks
+    .filter(t => t.artwork)
+    .map(t => ({
+      title: t.title || "",
+      artist: t.subtitle || "",
+      cover: t.artwork.url
+        .replace("{w}", "600")
+        .replace("{h}", "600"),
+      url: "https://music.apple.com" + t.href
+    }));
 }
 
 async function run() {
@@ -62,8 +83,8 @@ async function run() {
     console.log("Fetching:", p.name);
 
     const html = await fetchHTML(p.url);
-    const json = extractJSON(html);
-    const albums = parseAlbums(json);
+    const data = extractSerializedData(html);
+    const albums = parseAlbums(data);
 
     result.push({
       category: p.name,
@@ -79,4 +100,7 @@ async function run() {
   console.log("✅ albums.json updated");
 }
 
-run();
+run().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

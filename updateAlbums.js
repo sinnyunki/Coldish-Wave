@@ -1,63 +1,35 @@
 import fs from "fs";
 
 const PLAYLISTS = [
-  {
-    name: "pm2",
-    url: "https://music.apple.com/kr/playlist/codlishwave-pm2/pl.u-xlyNjvVtkpmLMy"
-  },
-  {
-    name: "pm5",
-    url: "https://music.apple.com/kr/playlist/codlishwave-pm5/pl.u-oZyl4JguR06J4K"
-  }
+  { name: "pm2", id: "pl.u-xlyNjvVtkpmLMy" },
+  { name: "pm5", id: "pl.u-oZyl4JguR06J4K" }
 ];
 
-async function scrapePlaylist(p) {
+async function fetchPlaylist(p) {
   console.log("Fetching:", p.name);
 
-  const res = await fetch(p.url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
-    }
-  });
+  const url = `https://itunes.apple.com/lookup?id=${p.id}&entity=song&country=kr`;
 
-  if (!res.ok) throw new Error("Failed to fetch playlist");
+  const res = await fetch(url);
 
-  const html = await res.text();
-
-  // ✅ 모든 JSON script 찾기
-  const scripts = [...html.matchAll(
-    /<script type="application\/json">([\s\S]*?)<\/script>/g
-  )];
-
-  let playlistData = null;
-
-  for (const s of scripts) {
-    try {
-      const json = JSON.parse(s[1]);
-
-      if (
-        json?.data?.[0]?.relationships?.tracks?.data
-      ) {
-        playlistData = json.data[0];
-        break;
-      }
-    } catch {}
+  if (!res.ok) {
+    throw new Error("Failed to fetch playlist");
   }
 
-  if (!playlistData)
-    throw new Error("Playlist JSON not found");
+  const json = await res.json();
 
-  const tracks =
-    playlistData.relationships.tracks.data;
+  if (!json.results || json.results.length === 0) {
+    throw new Error("Playlist empty");
+  }
+
+  // 첫 항목은 플레이리스트 정보 → 제외
+  const tracks = json.results.slice(1);
 
   const albums = tracks.map(t => ({
-    title: t.attributes.albumName,
-    artist: t.attributes.artistName,
-    cover: t.attributes.artwork.url
-      .replace("{w}", "600")
-      .replace("{h}", "600"),
-    url: t.attributes.url
+    title: t.collectionName,
+    artist: t.artistName,
+    cover: t.artworkUrl100.replace("100x100", "600x600"),
+    url: t.collectionViewUrl
   }));
 
   return {
@@ -70,7 +42,7 @@ async function run() {
   const result = [];
 
   for (const p of PLAYLISTS) {
-    const data = await scrapePlaylist(p);
+    const data = await fetchPlaylist(p);
     result.push(data);
   }
 

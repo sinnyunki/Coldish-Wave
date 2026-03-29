@@ -25,21 +25,39 @@ async function scrapePlaylist(p) {
 
   const html = await res.text();
 
-  // Apple Music JSON 데이터 추출
-  const match = html.match(/<script id="serialized-server-data".*?>(.*?)<\/script>/s);
+  // ✅ 모든 JSON script 찾기
+  const scripts = [...html.matchAll(
+    /<script type="application\/json">([\s\S]*?)<\/script>/g
+  )];
 
-  if (!match) throw new Error("Playlist data not found");
+  let playlistData = null;
 
-  const json = JSON.parse(match[1]);
+  for (const s of scripts) {
+    try {
+      const json = JSON.parse(s[1]);
+
+      if (
+        json?.data?.[0]?.relationships?.tracks?.data
+      ) {
+        playlistData = json.data[0];
+        break;
+      }
+    } catch {}
+  }
+
+  if (!playlistData)
+    throw new Error("Playlist JSON not found");
 
   const tracks =
-    json[0].data.sections[0].items;
+    playlistData.relationships.tracks.data;
 
   const albums = tracks.map(t => ({
-    title: t.title,
-    artist: t.subtitle,
-    cover: t.artwork.url.replace("{w}", "600").replace("{h}", "600"),
-    url: t.url
+    title: t.attributes.albumName,
+    artist: t.attributes.artistName,
+    cover: t.attributes.artwork.url
+      .replace("{w}", "600")
+      .replace("{h}", "600"),
+    url: t.attributes.url
   }));
 
   return {
